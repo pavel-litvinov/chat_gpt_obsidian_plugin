@@ -11,8 +11,10 @@
     "configure": "node scripts/configure.mjs",
     "tunnel:command": "node scripts/tunnel.mjs command",
     "tunnel:init": "node scripts/tunnel.mjs init",
+    "tunnel:connect": "node scripts/tunnel.mjs connect",
     "tunnel:doctor": "node scripts/tunnel.mjs doctor",
-    "tunnel:run": "node scripts/tunnel.mjs run"
+    "tunnel:run": "node scripts/tunnel.mjs run",
+    "tunnel:status": "node scripts/tunnel.mjs status"
   },
   "engines": {
     "node": ">=18"

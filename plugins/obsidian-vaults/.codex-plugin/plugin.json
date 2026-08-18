@@ -34,5 +34,6 @@
       "Search my Obsidian notes by tag."
     ]
   },
-  "mcpServers": "./.mcp.json"
+  "mcpServers": "./.mcp.json",
+  "apps": "./.app.json"
 }
