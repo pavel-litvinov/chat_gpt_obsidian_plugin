@@ -1,5 +1,5 @@
 const MCP_PROTOCOL_VERSION = "2025-06-18";
-const SERVER_VERSION = "0.1.0";
+const SERVER_VERSION = "0.2.0";
 const DEFAULT_PORT_START = 8766;
 const DEFAULT_PORT_END = 8786;
 const DEFAULT_DISCOVERY_TIMEOUT_MS = 400;
@@ -171,6 +171,7 @@ export const TOOL_DEFINITIONS = [
 
 export function createMcpRouter(options = {}) {
   const env = options.env ?? process.env;
+  const config = options.config ?? {};
   const fetchImpl = options.fetchImpl ?? globalThis.fetch;
   let nextRequestId = 1;
 
@@ -213,7 +214,7 @@ export function createMcpRouter(options = {}) {
         throw new Error("tools/call requires a tool name.");
       }
       const args = isRecord(params.arguments) ? { ...params.arguments } : {};
-      const vaults = await discoverVaults({ env, fetchImpl });
+      const vaults = await discoverVaults({ env, config, fetchImpl });
 
       if (params.name === "list_vaults") {
         return rpcResult(id, toolResult({ vaults }));
@@ -234,7 +235,7 @@ export function createMcpRouter(options = {}) {
           method: "tools/call",
           params: { name: params.name, arguments: args },
         },
-        { env, fetchImpl },
+        { env, config, fetchImpl },
       );
 
       if (isRecord(response.error)) {
@@ -258,13 +259,14 @@ export function createMcpRouter(options = {}) {
 
 export async function discoverVaults(options = {}) {
   const env = options.env ?? process.env;
+  const config = options.config ?? {};
   const fetchImpl = options.fetchImpl ?? globalThis.fetch;
   const timeoutMs = parseInteger(
-    env.OBSIDIAN_VAULT_DISCOVERY_TIMEOUT_MS,
+    env.OBSIDIAN_VAULT_DISCOVERY_TIMEOUT_MS ?? config.discoveryTimeoutMs,
     DEFAULT_DISCOVERY_TIMEOUT_MS,
     "OBSIDIAN_VAULT_DISCOVERY_TIMEOUT_MS",
   );
-  const ports = readPorts(env);
+  const ports = readPorts(env, config);
   const discovered = await Promise.all(
     ports.map(async (port) => {
       try {
@@ -335,7 +337,7 @@ export function selectVault(vaults, selector) {
 }
 
 async function callVault(vault, payload, options) {
-  const token = tokenForVault(vault, options.env);
+  const token = tokenForVault(vault, options.env, options.config);
   const headers = { "Content-Type": "application/json" };
   if (token !== "") headers.Authorization = `Bearer ${token}`;
 
@@ -348,7 +350,7 @@ async function callVault(vault, payload, options) {
   if (!response.ok) {
     if (response.status === 401) {
       throw new Error(
-        `Vault "${vault.name}" requires a bearer token. Set OBSIDIAN_VAULT_TOKEN or OBSIDIAN_VAULT_TOKENS.`,
+        `Vault "${vault.name}" requires a bearer token. Run npm run configure -- --vault "${vault.name}" --from-obsidian /path/to/vault/.obsidian/plugins/vault-toolkit/data.json, or set OBSIDIAN_VAULT_TOKEN(S).`,
       );
     }
     throw new Error(`Vault "${vault.name}" returned HTTP ${response.status}.`);
@@ -356,32 +358,53 @@ async function callVault(vault, payload, options) {
   return response.json();
 }
 
-function tokenForVault(vault, env) {
-  const fallback = env.OBSIDIAN_VAULT_TOKEN ?? "";
-  const raw = env.OBSIDIAN_VAULT_TOKENS;
-  if (typeof raw !== "string" || raw.trim() === "") return fallback;
+function tokenForVault(vault, env, config) {
+  const configuredTokens = isRecord(config.tokens) ? config.tokens : {};
+  const environmentTokens = readEnvironmentTokens(env.OBSIDIAN_VAULT_TOKENS);
+  const keys = [vault.id, vault.name, String(vault.port)];
+
+  for (const tokens of [environmentTokens, configuredTokens]) {
+    for (const key of keys) {
+      if (typeof tokens[key] === "string") return tokens[key];
+    }
+  }
+
+  return typeof env.OBSIDIAN_VAULT_TOKEN === "string"
+    ? env.OBSIDIAN_VAULT_TOKEN
+    : typeof config.token === "string"
+      ? config.token
+      : "";
+}
+
+function readEnvironmentTokens(raw) {
+  if (typeof raw !== "string" || raw.trim() === "") return {};
   try {
     const tokens = JSON.parse(raw);
-    if (!isRecord(tokens)) return fallback;
-    const token = tokens[vault.id] ?? tokens[vault.name] ?? tokens[String(vault.port)];
-    return typeof token === "string" ? token : fallback;
+    if (!isRecord(tokens)) throw new Error();
+    return tokens;
   } catch {
     throw new Error("OBSIDIAN_VAULT_TOKENS must be a JSON object.");
   }
 }
 
-function readPorts(env) {
+function readPorts(env, config) {
   if (typeof env.OBSIDIAN_VAULT_PORTS === "string" && env.OBSIDIAN_VAULT_PORTS.trim() !== "") {
     const ports = [...new Set(env.OBSIDIAN_VAULT_PORTS.split(",").map((value) => parsePort(value.trim(), "OBSIDIAN_VAULT_PORTS")))];
     return ports.sort((left, right) => left - right);
   }
 
+  if (Array.isArray(config.ports) && config.ports.length > 0) {
+    return [...new Set(config.ports.map((value) => parsePort(value, "config.ports")))].sort(
+      (left, right) => left - right,
+    );
+  }
+
   const start = parsePort(
-    env.OBSIDIAN_VAULT_PORT_START ?? String(DEFAULT_PORT_START),
+    env.OBSIDIAN_VAULT_PORT_START ?? config.portStart ?? String(DEFAULT_PORT_START),
     "OBSIDIAN_VAULT_PORT_START",
   );
   const end = parsePort(
-    env.OBSIDIAN_VAULT_PORT_END ?? String(DEFAULT_PORT_END),
+    env.OBSIDIAN_VAULT_PORT_END ?? config.portEnd ?? String(DEFAULT_PORT_END),
     "OBSIDIAN_VAULT_PORT_END",
   );
   if (end < start) {

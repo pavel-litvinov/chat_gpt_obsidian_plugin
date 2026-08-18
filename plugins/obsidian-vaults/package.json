@@ -1,13 +1,18 @@
 {
   "name": "@pavel-litvinov/obsidian-vaults-plugin",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "type": "module",
   "description": "Local multi-vault MCP client for the Obsidian Vault Toolkit bridge.",
   "scripts": {
-    "lint": "node --check server/index.mjs && node --check server/lib.mjs && node --check test/server.test.mjs",
+    "lint": "node --check server/index.mjs && node --check server/config.mjs && node --check server/lib.mjs && node --check scripts/configure.mjs && node --check scripts/tunnel.mjs && node --check test/server.test.mjs",
     "test": "node --test",
-    "check": "npm run lint && npm test"
+    "check": "npm run lint && npm test",
+    "configure": "node scripts/configure.mjs",
+    "tunnel:command": "node scripts/tunnel.mjs command",
+    "tunnel:init": "node scripts/tunnel.mjs init",
+    "tunnel:doctor": "node scripts/tunnel.mjs doctor",
+    "tunnel:run": "node scripts/tunnel.mjs run"
   },
   "engines": {
     "node": ">=18"

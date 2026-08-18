@@ -11,7 +11,7 @@ Use ChatGPT or Codex with every Obsidian vault currently open on your computer. 
 - Create, append, patch, or replace notes.
 - Set or remove individual frontmatter properties.
 
-All bridge traffic stays on `127.0.0.1`. No Obsidian account or Obsidian Sync subscription is required.
+The Obsidian bridge itself stays on `127.0.0.1`. No Obsidian account or Obsidian Sync subscription is required.
 
 ## Prerequisite: the Obsidian-side plugin
 
@@ -19,7 +19,22 @@ Install and enable [Vault Toolkit](https://github.com/pavel-litvinov/obsidian_ch
 
 By default, this plugin discovers bridges on ports `8766` through `8786`, matching Vault Toolkit's port selection behavior.
 
-## Install from this GitHub marketplace
+## Configure bearer-token access
+
+Vault Toolkit can protect each vault with a different bearer token. Obsidian Vaults stores those tokens in a local owner-readable configuration file; it never adds them to this repository or prints them.
+
+Run this once for each protected vault:
+
+```sh
+cd plugins/obsidian-vaults
+npm run configure -- \
+  --vault Games \
+  --from-obsidian "/path/to/Games/.obsidian/plugins/vault-toolkit/data.json"
+```
+
+The default configuration path is `~/.config/obsidian-vaults/config.json` on macOS/Linux and the corresponding application-data directory on Windows. Set `OBSIDIAN_VAULT_CONFIG` to use another path. The configurator also records the vault's preferred bridge port.
+
+## Use with Codex
 
 Using the Codex CLI:
 
@@ -28,7 +43,7 @@ codex plugin marketplace add pavel-litvinov/chat_gpt_obsidian_plugin
 codex plugin add obsidian-vaults@pavel-litvinov
 ```
 
-Then start a new ChatGPT/Codex desktop task so the plugin and its tools are loaded.
+Then start a new Codex task so the plugin and its tools are loaded.
 
 For local development, add the checked-out repository instead:
 
@@ -44,13 +59,31 @@ Example prompts:
 - “Find notes tagged `#idea` in research_results.”
 - “Add a `status: planned` frontmatter property to Games/Backlog.md.”
 
-## ChatGPT web limitation
+## Use with ChatGPT
 
-This repository is a local desktop plugin because the Obsidian bridge intentionally listens only on your computer. ChatGPT in a web browser cannot directly connect to `127.0.0.1`. A future public web app would need a separately hosted HTTPS MCP service and an explicit secure connection back to the computer running Obsidian.
+ChatGPT cannot call a bundled local `.mcp.json` process directly. For a private local Obsidian bridge, use [OpenAI Secure MCP Tunnel](https://developers.openai.com/api/docs/guides/secure-mcp-tunnels) and register a developer-mode app:
+
+1. Enable Developer mode in ChatGPT under Settings → Security and login.
+2. Create an MCP tunnel in [OpenAI Platform tunnel settings](https://platform.openai.com/settings/organization/tunnels), associate it with the ChatGPT workspace, and create a runtime API key.
+3. Download the latest [`tunnel-client`](https://github.com/openai/tunnel-client/releases/latest), put it on `PATH`, and initialize the profile from this plugin directory:
+
+   ```sh
+   export CONTROL_PLANE_API_KEY="sk-..."
+   npm run tunnel:init -- --tunnel-id tunnel_...
+   npm run tunnel:doctor
+   npm run tunnel:run
+   ```
+
+4. While the tunnel client is running, open [ChatGPT Plugins](https://chatgpt.com/admin/apps), create a developer-mode app, choose **Tunnel** as the connection, and select the tunnel.
+5. Copy the connection's technical `plugin_asdk_app...` ID into this plugin's `.app.json`, add `"apps": "./.app.json"` to `plugin.json`, reinstall the plugin, and test it in a new chat.
+
+`npm run tunnel:command` prints the exact stdio command used by the tunnel profile. The runtime API key belongs only in the environment or a secure service manager—never in Git.
+
+Secure Tunnel is intended for private access and developer testing. It does not make this local bridge eligible for universal public plugin submission; public submission requires a stable public HTTPS MCP endpoint. The GitHub marketplace can still distribute the plugin code to your other computers, but each computer must install Vault Toolkit, configure its local tokens, and run a tunnel client.
 
 ## Configuration
 
-The defaults require no configuration. Advanced users may pass these environment variables to the MCP server:
+The local JSON configuration is recommended for bearer tokens. Environment variables override it:
 
 | Variable | Purpose |
 | --- | --- |
@@ -59,6 +92,7 @@ The defaults require no configuration. Advanced users may pass these environment
 | `OBSIDIAN_VAULT_TOKEN` | One bearer token shared by the open vaults. |
 | `OBSIDIAN_VAULT_TOKENS` | JSON map keyed by vault name, id, or port for per-vault tokens. |
 | `OBSIDIAN_VAULT_DISCOVERY_TIMEOUT_MS` | Timeout for each local health check; default is 400 ms. |
+| `OBSIDIAN_VAULT_CONFIG` | Override the local JSON configuration path. |
 
 ## Development
 
@@ -71,7 +105,7 @@ npm run check
 
 ## Privacy and permissions
 
-The plugin can enumerate, read, and write notes only in vaults where Vault Toolkit is installed and running. Vault Toolkit may be protected with a bearer token. The client makes no external network request: it probes and calls only loopback addresses (`127.0.0.1`).
+The plugin can enumerate, read, and write notes only in vaults where Vault Toolkit is installed and running. Its MCP client probes and calls only loopback addresses (`127.0.0.1`). When ChatGPT uses Secure Tunnel, `tunnel-client` makes an outbound HTTPS connection to OpenAI and forwards MCP requests to the local client; no inbound port is opened.
 
 ## License
 

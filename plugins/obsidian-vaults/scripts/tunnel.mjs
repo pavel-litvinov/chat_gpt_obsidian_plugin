@@ -1,0 +1,64 @@
+#!/usr/bin/env node
+import { spawnSync } from "node:child_process";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
+
+const pluginRoot = join(dirname(fileURLToPath(import.meta.url)), "..");
+const serverPath = join(pluginRoot, "server", "index.mjs");
+const mcpCommand = `${shellQuote(process.execPath)} ${shellQuote(serverPath)}`;
+const [action, ...values] = process.argv.slice(2);
+
+if (action === "command") {
+  process.stdout.write(`${mcpCommand}\n`);
+  process.exit(0);
+}
+
+if (!["init", "doctor", "run"].includes(action)) {
+  throw new Error(
+    "Usage: node scripts/tunnel.mjs command | init --tunnel-id tunnel_... | doctor | run",
+  );
+}
+
+const tunnelClient = process.env.TUNNEL_CLIENT_BIN || "tunnel-client";
+const profile = process.env.OBSIDIAN_VAULT_TUNNEL_PROFILE || "obsidian-vaults";
+let clientArguments;
+
+if (action === "init") {
+  const tunnelId = optionValue(values, "--tunnel-id");
+  if (!tunnelId?.startsWith("tunnel_")) throw new Error("init requires --tunnel-id tunnel_...");
+  clientArguments = [
+    "init",
+    "--sample",
+    "sample_mcp_stdio_local",
+    "--profile",
+    profile,
+    "--tunnel-id",
+    tunnelId,
+    "--mcp-command",
+    mcpCommand,
+  ];
+} else if (action === "doctor") {
+  clientArguments = ["doctor", "--profile", profile, "--explain"];
+} else {
+  clientArguments = ["run", "--profile", profile];
+}
+
+const result = spawnSync(tunnelClient, clientArguments, { stdio: "inherit", env: process.env });
+if (result.error) {
+  if (result.error.code === "ENOENT") {
+    throw new Error(
+      "tunnel-client was not found. Download the latest release from https://github.com/openai/tunnel-client/releases/latest or set TUNNEL_CLIENT_BIN.",
+    );
+  }
+  throw result.error;
+}
+process.exit(result.status ?? 1);
+
+function optionValue(values, name) {
+  const index = values.indexOf(name);
+  return index === -1 ? undefined : values[index + 1];
+}
+
+function shellQuote(value) {
+  return `'${String(value).replaceAll("'", `'"'"'`)}'`;
+}
