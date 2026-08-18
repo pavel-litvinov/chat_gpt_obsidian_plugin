@@ -65,19 +65,32 @@ ChatGPT cannot call a bundled local `.mcp.json` process directly. For a private 
 
 1. Enable Developer mode in ChatGPT under Settings → Security and login.
 2. Create an MCP tunnel in [OpenAI Platform tunnel settings](https://platform.openai.com/settings/organization/tunnels), associate it with the ChatGPT workspace, and create a runtime API key.
-3. Download the latest [`tunnel-client`](https://github.com/openai/tunnel-client/releases/latest), put it on `PATH`, and initialize the profile from this plugin directory:
+3. Download the latest [`tunnel-client`](https://github.com/openai/tunnel-client/releases/latest), put it on `PATH`, and start a managed runtime from this plugin directory. Store the runtime key in a file readable only by your user; the file is outside the repository:
+
+   ```sh
+   mkdir -p ~/.config/tunnel-client
+   chmod 700 ~/.config/tunnel-client
+   # Save the runtime key to ~/.config/tunnel-client/obsidian-vaults.key, then:
+   chmod 600 ~/.config/tunnel-client/obsidian-vaults.key
+   npm run tunnel:connect -- \
+     --tunnel-id tunnel_... \
+     --api-key-ref file:$HOME/.config/tunnel-client/obsidian-vaults.key
+   npm run tunnel:status
+   npm run tunnel:doctor
+   ```
+
+   To run in the foreground instead, initialize and run a profile:
 
    ```sh
    export CONTROL_PLANE_API_KEY="sk-..."
    npm run tunnel:init -- --tunnel-id tunnel_...
-   npm run tunnel:doctor
    npm run tunnel:run
    ```
 
 4. While the tunnel client is running, open [ChatGPT Plugins](https://chatgpt.com/admin/apps), create a developer-mode app, choose **Tunnel** as the connection, and select the tunnel.
-5. Copy the connection's technical `plugin_asdk_app...` ID into this plugin's `.app.json`, add `"apps": "./.app.json"` to `plugin.json`, reinstall the plugin, and test it in a new chat.
+5. This repository's `.app.json` references the private `Obsidian Vaults` developer app registered for the maintainer's ChatGPT workspace. When using a different ChatGPT workspace, create its developer app and replace the `plugin_asdk_app...` ID before reinstalling the plugin.
 
-`npm run tunnel:command` prints the exact stdio command used by the tunnel profile. The runtime API key belongs only in the environment or a secure service manager—never in Git.
+`npm run tunnel:command` prints the exact stdio command used by the tunnel profile. `OBSIDIAN_VAULT_TUNNEL_API_KEY_REF` can set the default `env:VARIABLE` or `file:/absolute/path` reference. The runtime API key belongs only in an owner-readable file, environment variable, or secure service manager—never in Git.
 
 Secure Tunnel is intended for private access and developer testing. It does not make this local bridge eligible for universal public plugin submission; public submission requires a stable public HTTPS MCP endpoint. The GitHub marketplace can still distribute the plugin code to your other computers, but each computer must install Vault Toolkit, configure its local tokens, and run a tunnel client.
 
