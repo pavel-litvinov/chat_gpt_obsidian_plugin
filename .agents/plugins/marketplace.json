@@ -1,0 +1,20 @@
+{
+  "name": "pavel-litvinov",
+  "interface": {
+    "displayName": "Pavel Litvinov Plugins"
+  },
+  "plugins": [
+    {
+      "name": "obsidian-vaults",
+      "source": {
+        "source": "local",
+        "path": "./plugins/obsidian-vaults"
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_USE"
+      },
+      "category": "Productivity"
+    }
+  ]
+}

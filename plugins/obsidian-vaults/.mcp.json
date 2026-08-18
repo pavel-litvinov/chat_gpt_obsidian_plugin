@@ -1,0 +1,19 @@
+{
+  "mcpServers": {
+    "obsidian_vaults": {
+      "command": "node",
+      "args": ["./server/index.mjs"],
+      "cwd": ".",
+      "env_vars": [
+        "OBSIDIAN_VAULT_PORTS",
+        "OBSIDIAN_VAULT_PORT_START",
+        "OBSIDIAN_VAULT_PORT_END",
+        "OBSIDIAN_VAULT_TOKEN",
+        "OBSIDIAN_VAULT_TOKENS",
+        "OBSIDIAN_VAULT_DISCOVERY_TIMEOUT_MS"
+      ],
+      "startup_timeout_sec": 10,
+      "tool_timeout_sec": 60
+    }
+  }
+}
