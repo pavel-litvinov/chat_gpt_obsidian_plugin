@@ -15,6 +15,7 @@ Use the `obsidian_vaults` MCP tools to work with Obsidian notes stored on this c
 4. Never silently substitute a different vault when the requested vault is unavailable.
 
 If no vault is found, tell the user to open Obsidian and enable the Vault Toolkit community plugin in that vault.
+If a vault is listed but a note call reports that a bearer token is required, explain that the local Obsidian Vaults configuration must be synchronized from that vault's Vault Toolkit settings. Do not ask the user to paste the token into chat.
 
 ## Read and search
 
@@ -35,4 +36,4 @@ If no vault is found, tell the user to open Obsidian and enable the Vault Toolki
 
 ## Privacy
 
-The MCP client connects only to `127.0.0.1`. Note content is handled through the local Obsidian bridge and the active ChatGPT/Codex conversation. Do not claim that an Obsidian account or Obsidian Sync is required.
+The MCP client connects to Vault Toolkit only over `127.0.0.1`. In ChatGPT, a Secure MCP Tunnel may carry MCP requests between OpenAI and this local client without exposing an inbound port. Note content is handled through the active ChatGPT/Codex conversation. Do not claim that an Obsidian account or Obsidian Sync is required.
