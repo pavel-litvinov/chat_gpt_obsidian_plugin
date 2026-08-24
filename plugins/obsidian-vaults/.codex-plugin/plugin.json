@@ -1,6 +1,6 @@
 {
   "name": "obsidian-vaults",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Use ChatGPT or Codex with every Obsidian vault currently open on this computer.",
   "author": {
     "name": "Pavel Litvinov",
@@ -19,19 +19,22 @@
   "skills": "./skills/",
   "interface": {
     "displayName": "Obsidian Vaults",
-    "shortDescription": "Read and update your open Obsidian vaults.",
-    "longDescription": "Connects ChatGPT and Codex to local Obsidian vaults through the Vault Toolkit bridge. Discover open vaults, read and search notes, inspect tags and frontmatter, and make focused updates.",
+    "shortDescription": "Search, connect, and update your Obsidian notes.",
+    "longDescription": "Connects ChatGPT and Codex to local Obsidian vaults through Vault Toolkit. Search full note contents, navigate links and graph relationships, inspect metadata, use templates and Dataview, and make focused or atomic multi-note updates.",
     "developerName": "Pavel Litvinov",
     "category": "Productivity",
     "capabilities": [
       "Read",
       "Write",
+      "Search",
+      "Graph",
       "Local"
     ],
     "defaultPrompt": [
       "Show my open Obsidian vaults.",
       "Read the active Obsidian note.",
-      "Search my Obsidian notes by tag."
+      "Search my Obsidian notes by content and tag.",
+      "Show the notes linked to the active note."
     ]
   },
   "mcpServers": "./.mcp.json",

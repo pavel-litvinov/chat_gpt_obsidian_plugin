@@ -10,7 +10,8 @@
         "OBSIDIAN_VAULT_PORT_END",
         "OBSIDIAN_VAULT_TOKEN",
         "OBSIDIAN_VAULT_TOKENS",
-        "OBSIDIAN_VAULT_DISCOVERY_TIMEOUT_MS"
+        "OBSIDIAN_VAULT_DISCOVERY_TIMEOUT_MS",
+        "OBSIDIAN_VAULT_CONFIG"
       ],
       "startup_timeout_sec": 10,
       "tool_timeout_sec": 60
