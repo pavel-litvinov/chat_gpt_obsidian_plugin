@@ -1,23 +1,28 @@
 # Obsidian Vaults for ChatGPT and Codex
 
-Use ChatGPT or Codex with every Obsidian vault currently open on your computer. The plugin discovers local Vault Toolkit bridges, asks which vault to use when several are open, and exposes focused tools for notes and metadata.
+Use ChatGPT or Codex with every Obsidian vault currently open on your computer. The plugin discovers local Vault Toolkit bridges, asks which vault to use when several are open, and exposes the complete Vault Toolkit 0.3 MCP API.
 
 ## What it can do
 
 - Discover all open Obsidian vaults, including `Games`, `research_results`, and other vaults.
 - Read the active note or any note by path.
-- Search and list notes.
+- Search paths and full note contents with text or regular expressions.
 - Inspect vault metadata, tags, and frontmatter.
 - Create, append, patch, or replace notes.
 - Set or remove individual frontmatter properties.
+- Follow backlinks and outgoing links, or explore a bounded note graph.
+- Rename or move notes while Obsidian updates wikilinks.
+- Create notes from templates and atomically write batches of notes.
+- Run Dataview DQL queries when Dataview is installed in the selected vault.
 
 The Obsidian bridge itself stays on `127.0.0.1`. No Obsidian account or Obsidian Sync subscription is required.
 
 ## Prerequisite: the Obsidian-side plugin
 
-Install and enable [Vault Toolkit](https://github.com/pavel-litvinov/obsidian_chat_gpt_plugin) in every vault that ChatGPT should access. Open those vaults in Obsidian and leave their local MCP bridges enabled.
+Install and enable [Vault Toolkit 0.3.0 or newer](https://github.com/pavel-litvinov/obsidian_chat_gpt_plugin) in every vault that ChatGPT should access. Open those vaults in Obsidian and leave their local MCP bridges enabled.
 
 By default, this plugin discovers bridges on ports `8766` through `8786`, matching Vault Toolkit's port selection behavior.
+`list_vaults` reports each bridge version so ChatGPT can identify vaults that still need the 0.3 update.
 
 ## Configure bearer-token access
 
@@ -56,7 +61,10 @@ Example prompts:
 
 - “Show my open Obsidian vaults.”
 - “Read the active note in Games.”
-- “Find notes tagged `#idea` in research_results.”
+- “Find notes containing `dragon` and tagged `#idea` in Games.”
+- “Show backlinks and outgoing links for `Campaign/Dragon.md`.”
+- “Create `Sessions/Next.md` from `Templates/Session.md`.”
+- “Run the Dataview query `LIST FROM #quest` in Games.”
 - “Add a `status: planned` frontmatter property to Games/Backlog.md.”
 
 ## Use with ChatGPT
@@ -97,6 +105,10 @@ Secure Tunnel is intended for private access and developer testing. It does not 
 ## Configuration
 
 The local JSON configuration is recommended for bearer tokens. Environment variables override it:
+
+Ports recorded by the configurator are added to the normal discovery range; they do not disable
+discovery of other open vaults. Set `OBSIDIAN_VAULT_PORTS` only when discovery must be restricted
+to an exact list of ports.
 
 | Variable | Purpose |
 | --- | --- |

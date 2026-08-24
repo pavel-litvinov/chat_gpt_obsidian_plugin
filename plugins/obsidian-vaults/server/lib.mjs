@@ -1,5 +1,5 @@
 const MCP_PROTOCOL_VERSION = "2025-06-18";
-const SERVER_VERSION = "0.2.0";
+const SERVER_VERSION = "0.3.0";
 const DEFAULT_PORT_START = 8766;
 const DEFAULT_PORT_END = 8786;
 const DEFAULT_DISCOVERY_TIMEOUT_MS = 400;
@@ -34,7 +34,7 @@ export const TOOL_DEFINITIONS = [
   {
     name: "list_vaults",
     description:
-      "Discover the Obsidian vaults currently exposing a local Vault Toolkit bridge.",
+      "Discover the Obsidian vaults currently exposing a local Vault Toolkit bridge, including bridge versions.",
     inputSchema: { type: "object", properties: {} },
     annotations: readOnly,
   },
@@ -56,9 +56,14 @@ export const TOOL_DEFINITIONS = [
   {
     name: "search_notes",
     description:
-      "Search notes by path or title, tags, and frontmatter. Filters combine with AND; tags match any supplied tag.",
+      "Search note paths and full Markdown content, with optional regex, tag, and frontmatter filters. Filters combine with AND; tags match any supplied tag.",
     inputSchema: schema({
-      query: { type: "string", description: "Case-insensitive path or title fragment." },
+      query: { type: "string", description: "Path or full-content text fragment." },
+      regex: {
+        type: "string",
+        description: "Regular expression applied to path and content.",
+      },
+      case_sensitive: { type: "boolean", default: false },
       tag: { type: "string", description: "A single tag, with or without #." },
       tags: {
         type: "array",
@@ -72,6 +77,36 @@ export const TOOL_DEFINITIONS = [
       },
       limit: { type: "integer", minimum: 1, maximum: 200, default: 50 },
     }),
+    annotations: readOnly,
+  },
+  {
+    name: "get_backlinks",
+    description: "List Markdown notes containing resolved wikilinks to a note.",
+    inputSchema: schema(
+      { path: { type: "string", description: "Vault-relative note path." } },
+      ["path"],
+    ),
+    annotations: readOnly,
+  },
+  {
+    name: "get_outgoing_links",
+    description: "List Markdown notes reached by resolved wikilinks from a note.",
+    inputSchema: schema(
+      { path: { type: "string", description: "Vault-relative note path." } },
+      ["path"],
+    ),
+    annotations: readOnly,
+  },
+  {
+    name: "get_graph_neighbors",
+    description: "Traverse incoming and outgoing wikilinks up to a bounded depth.",
+    inputSchema: schema(
+      {
+        path: { type: "string", description: "Vault-relative note path." },
+        depth: { type: "integer", minimum: 1, maximum: 10, default: 1 },
+      },
+      ["path"],
+    ),
     annotations: readOnly,
   },
   {
@@ -166,6 +201,70 @@ export const TOOL_DEFINITIONS = [
       ["path", "key"],
     ),
     annotations: safeUpdate,
+  },
+  {
+    name: "rename_note",
+    description: "Rename or move a note through Obsidian and update wikilinks across the vault.",
+    inputSchema: schema(
+      {
+        old_path: { type: "string", description: "Existing vault-relative note path." },
+        new_path: { type: "string", description: "New vault-relative note path." },
+      },
+      ["old_path", "new_path"],
+    ),
+    annotations: safeUpdate,
+  },
+  {
+    name: "batch_write",
+    description: "Atomically create or update up to 100 notes. Any failure rolls back the entire batch.",
+    inputSchema: schema(
+      {
+        operations: {
+          type: "array",
+          minItems: 1,
+          maxItems: 100,
+          items: {
+            type: "object",
+            properties: {
+              type: { type: "string", enum: ["create", "update"] },
+              path: { type: "string" },
+              content: { type: "string" },
+              frontmatter: { type: "object", additionalProperties: true },
+            },
+            required: ["type", "path"],
+            additionalProperties: false,
+          },
+        },
+      },
+      ["operations"],
+    ),
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: true,
+      idempotentHint: false,
+    },
+  },
+  {
+    name: "create_from_template",
+    description: "Create a note from an Obsidian template using title, date, time, and custom variables.",
+    inputSchema: schema(
+      {
+        template_path: { type: "string" },
+        target_path: { type: "string" },
+        variables: { type: "object", additionalProperties: true, default: {} },
+      },
+      ["template_path", "target_path"],
+    ),
+    annotations: additiveWrite,
+  },
+  {
+    name: "query_dataview",
+    description: "Execute a Dataview DQL query and return its result as JSON.",
+    inputSchema: schema(
+      { dql_query: { type: "string" } },
+      ["dql_query"],
+    ),
+    annotations: readOnly,
   },
 ];
 
@@ -291,6 +390,11 @@ export async function discoverVaults(options = {}) {
           name,
           port,
           server: typeof health.server === "string" ? health.server : "vault-toolkit",
+          version: typeof health.version === "string" ? health.version : undefined,
+          authentication:
+            typeof health.authentication === "string"
+              ? health.authentication
+              : undefined,
         };
       } catch {
         return null;
@@ -393,12 +497,6 @@ function readPorts(env, config) {
     return ports.sort((left, right) => left - right);
   }
 
-  if (Array.isArray(config.ports) && config.ports.length > 0) {
-    return [...new Set(config.ports.map((value) => parsePort(value, "config.ports")))].sort(
-      (left, right) => left - right,
-    );
-  }
-
   const start = parsePort(
     env.OBSIDIAN_VAULT_PORT_START ?? config.portStart ?? String(DEFAULT_PORT_START),
     "OBSIDIAN_VAULT_PORT_START",
@@ -413,7 +511,13 @@ function readPorts(env, config) {
   if (end - start > 1000) {
     throw new Error("The Obsidian vault discovery range may contain at most 1001 ports.");
   }
-  return Array.from({ length: end - start + 1 }, (_, offset) => start + offset);
+
+  const range = Array.from({ length: end - start + 1 }, (_, offset) => start + offset);
+  const configuredPorts = Array.isArray(config.ports)
+    ? config.ports.map((value) => parsePort(value, "config.ports"))
+    : [];
+
+  return [...new Set([...range, ...configuredPorts])].sort((left, right) => left - right);
 }
 
 function parsePort(value, name) {
@@ -456,7 +560,16 @@ function toolError(message) {
 }
 
 function publicVault(vault) {
-  return { id: vault.id, name: vault.name, port: vault.port, server: vault.server };
+  return {
+    id: vault.id,
+    name: vault.name,
+    port: vault.port,
+    server: vault.server,
+    ...(vault.version === undefined ? {} : { version: vault.version }),
+    ...(vault.authentication === undefined
+      ? {}
+      : { authentication: vault.authentication }),
+  };
 }
 
 function rpcResult(id, result) {

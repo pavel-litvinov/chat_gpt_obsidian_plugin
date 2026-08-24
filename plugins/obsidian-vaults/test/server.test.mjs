@@ -82,15 +82,111 @@ test("lists vaults without forwarding a tool call", async () => {
     params: { name: "list_vaults", arguments: {} },
   });
   assert.deepEqual(response.result.structuredContent.vaults[0].name, "Games");
+  assert.equal(response.result.structuredContent.vaults[0].version, "0.3.1");
+  assert.equal(response.result.structuredContent.vaults[0].authentication, "bearer");
   assert.equal(mock.calls.length, 0);
+});
+
+test("configured ports augment the default discovery range", async () => {
+  const probedPorts = [];
+  const fetchImpl = async (url) => {
+    const port = Number(new URL(url).port);
+    probedPorts.push(port);
+    if (port !== 8767 && port !== 9000) return { ok: false };
+    const name = port === 8767 ? "Research" : "Archive";
+    return {
+      ok: true,
+      json: async () => ({
+        status: "ok",
+        vault: { id: `${name}@${port}`, name },
+        server: "vault-toolkit-bridge",
+      }),
+    };
+  };
+
+  const vaults = await discoverVaults({ config: { ports: [9000] }, fetchImpl });
+
+  assert.deepEqual(vaults.map(({ name, port }) => ({ name, port })), [
+    { name: "Research", port: 8767 },
+    { name: "Archive", port: 9000 },
+  ]);
+  assert.deepEqual(probedPorts, [
+    ...Array.from({ length: 21 }, (_, offset) => 8766 + offset),
+    9000,
+  ]);
 });
 
 test("advertises a vault selector on every forwarded tool", () => {
   const forwarded = TOOL_DEFINITIONS.filter((tool) => tool.name !== "list_vaults");
-  assert.equal(forwarded.length, 11);
+  assert.deepEqual(
+    forwarded.map((tool) => tool.name),
+    [
+      "read_note",
+      "read_active_note",
+      "search_notes",
+      "get_backlinks",
+      "get_outgoing_links",
+      "get_graph_neighbors",
+      "list_notes",
+      "get_note_metadata",
+      "get_vault_metadata",
+      "create_note",
+      "update_note",
+      "append_to_note",
+      "patch_note",
+      "update_frontmatter",
+      "rename_note",
+      "batch_write",
+      "create_from_template",
+      "query_dataview",
+    ],
+  );
   for (const tool of forwarded) {
     assert.equal(tool.inputSchema.properties.vault.type, "string");
   }
+});
+
+test("matches the expanded Vault Toolkit 0.3 tool schemas", () => {
+  const search = TOOL_DEFINITIONS.find((tool) => tool.name === "search_notes");
+  assert.equal(search.inputSchema.properties.regex.type, "string");
+  assert.equal(search.inputSchema.properties.case_sensitive.type, "boolean");
+
+  const graph = TOOL_DEFINITIONS.find((tool) => tool.name === "get_graph_neighbors");
+  assert.equal(graph.inputSchema.properties.depth.maximum, 10);
+
+  const batch = TOOL_DEFINITIONS.find((tool) => tool.name === "batch_write");
+  assert.equal(batch.inputSchema.properties.operations.maxItems, 100);
+  assert.deepEqual(batch.inputSchema.properties.operations.items.properties.type.enum, [
+    "create",
+    "update",
+  ]);
+});
+
+test("forwards expanded tool arguments without the vault selector", async () => {
+  const mock = await startVault("Games");
+  const route = createMcpRouter({
+    env: { OBSIDIAN_VAULT_PORTS: String(mock.port) },
+  });
+  const operations = [
+    { type: "create", path: "Campaign/NPC.md", content: "# NPC" },
+  ];
+
+  const response = await route({
+    jsonrpc: "2.0",
+    id: 7,
+    method: "tools/call",
+    params: {
+      name: "batch_write",
+      arguments: { vault: "Games", operations },
+    },
+  });
+
+  assert.equal(response.result.isError, false);
+  assert.equal(response.result.structuredContent._vault.name, "Games");
+  assert.deepEqual(mock.calls[0].params, {
+    name: "batch_write",
+    arguments: { operations },
+  });
 });
 
 test("selectVault accepts names, ids, and ports", () => {
@@ -164,6 +260,8 @@ async function startVault(name, options = {}) {
         status: "ok",
         vault: { id: `${name}@test`, name },
         server: "vault-toolkit-bridge",
+        version: options.version ?? "0.3.1",
+        authentication: "bearer",
       });
       return;
     }
